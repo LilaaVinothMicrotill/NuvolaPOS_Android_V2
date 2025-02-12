@@ -1,0 +1,48 @@
+plugins {
+    alias(libs.plugins.androidApplication)
+}
+
+android {
+    namespace 'com.example.nuvolapos'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.example.nuvolapos"
+        minSdk 21
+        targetSdk 29
+        versionCode 1
+        versionName "1.0"
+
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+}
+
+dependencies {
+
+    implementation libs.appcompat
+    implementation libs.material
+    implementation libs.activity
+    implementation libs.constraintlayout
+    testImplementation libs.junit
+    androidTestImplementation libs.ext.junit
+    androidTestImplementation libs.espresso.core
+
+    implementation 'com.clover.sdk:clover-android-sdk:latest.release'
+    implementation 'com.clover.sdk:clover-android-connector-sdk:latest.release'
+
+    implementation 'com.clover:clover-remote-interface:latest.release'
+    implementation 'com.clover.sdk:remote-pay-android-connector:latest.release'
+
+    implementation 'com.squareup.okhttp3:okhttp:4.9.3'
+}
