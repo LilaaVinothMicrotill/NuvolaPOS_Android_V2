@@ -3,23 +3,43 @@ plugins {
 }
 
 android {
-    namespace 'com.example.nuvolapos'
+    namespace 'com.v2.nuvolapos'
     compileSdk 34
 
     defaultConfig {
-        applicationId "com.example.nuvolapos"
+        applicationId "com.v2.nuvolapos"
         minSdk 21
         targetSdk 29
-        versionCode 1
+        versionCode 3
         versionName "1.0"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+//    RELEASE
+    signingConfigs{
+        release {
+//            storeFile file("C:\\Users\\Developer\\Desktop\\NewStandAlone.jks")
+//            storeFile file("/Users/microtill/Desktop/NewStandAlone.jks") // Mac
+            storeFile file("/Users/lilaavinoth/Downloads/NuvolaPOS_V2.jks") // Vinoth's Personal Mac
+            storePassword '159346'
+            keyAlias 'key0'
+            keyPassword '159346'
+
+            enableV1Signing true // Clover app APKs must use V1 signing (JAR signing)
+            enableV2Signing false // prevents APKs from being signed with V2 scheme
+        }
+    }
+
+    lintOptions {
+        checkReleaseBuilds false
     }
 
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.release
         }
     }
     compileOptions {

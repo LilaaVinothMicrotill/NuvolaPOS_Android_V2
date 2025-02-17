@@ -1,4 +1,4 @@
-package com.example.nuvolapos;
+package com.v2.nuvolapos;
 
 import org.junit.Test;
 

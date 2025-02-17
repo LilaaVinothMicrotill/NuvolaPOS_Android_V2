@@ -1,21 +1,27 @@
-package com.example.nuvolapos;
+package com.v2.nuvolapos;
 
 import static com.clover.sdk.internal.util.BitmapUtils.TAG;
 
 import android.accounts.Account;
 import android.content.Context;
 import android.content.Intent;
-import android.hardware.camera2.CameraManager;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
+import android.net.http.SslError;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
+import android.view.View;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.webkit.WebChromeClient;
+import android.webkit.ConsoleMessage;
+import android.webkit.SslErrorHandler;
+import android.webkit.CookieManager;
+import android.graphics.Bitmap;
 import android.widget.Toast;
 
 import androidx.activity.EdgeToEdge;
@@ -25,7 +31,6 @@ import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 
 import com.clover.remote.Challenge;
-import com.clover.remote.client.CloverConnector;
 import com.clover.remote.client.DefaultCloverConnectorListener;
 import com.clover.remote.client.ICloverConnector;
 import com.clover.remote.client.messages.ConfirmPaymentRequest;
@@ -37,7 +42,6 @@ import com.clover.sdk.v3.payments.Payment;
 import java.io.OutputStreamWriter;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
-import java.util.Objects;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -49,23 +53,23 @@ import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.RequestBody;
-import okhttp3.Response;
 
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 import android.content.SharedPreferences;
+import android.webkit.WebStorage;
+import android.os.Build;
 
 public class MainActivity extends AppCompatActivity {
     private WebView webView;
     private SaleRequest pendingSale;
-
     private Account cloverAccount;
 //    private static final String TARGET_URL = "http://10.0.2.2:3000/";
 //     private static final String TARGET_URL = "https://nuvolapos.vercel.app/";
-     private static final String TARGET_URL = "http://192.168.0.69:3000/";
-//     private static final String TARGET_URL = "https://nuvolapos-git-page-cache-android-scott-microtillcos-projects.vercel.app/";
+//     private static final String TARGET_URL = "http://192.168.0.69:3000/";
+//      private static final String TARGET_URL = "https://nuvolapos-git-page-cache-android-scott-microtillcos-projects.vercel.app/";
+      private static final String TARGET_URL = "http://192.168.43.168:3000";
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -78,35 +82,72 @@ public class MainActivity extends AppCompatActivity {
 
         // Configure WebView settings
         WebSettings webSettings = webView.getSettings();
+        
+        // Essential JavaScript settings
         webSettings.setJavaScriptEnabled(true);
         webSettings.setDomStorageEnabled(true);
-
-
-        webSettings.setCacheMode(WebSettings.LOAD_DEFAULT);
+        webSettings.setDatabaseEnabled(true);
+        
+        // Additional settings for React compatibility
+        webSettings.setJavaScriptCanOpenWindowsAutomatically(true);
         webSettings.setAllowFileAccess(true);
         webSettings.setAllowContentAccess(true);
+        webSettings.setAllowFileAccessFromFileURLs(true);
+        webSettings.setAllowUniversalAccessFromFileURLs(true);
+        webSettings.setDomStorageEnabled(true);
+        webSettings.setLoadWithOverviewMode(true);
+        webSettings.setUseWideViewPort(true);
+        
+        // Set modern user agent
+        String newUserAgent = webSettings.getUserAgentString();
+        webSettings.setUserAgentString(newUserAgent + " Chrome/90.0.4430.91");
 
-
-        webSettings.setDatabaseEnabled(true);
-
-        // Custom WebViewClient to handle offline mode
+        // Custom WebViewClient with improved error handling
         webView.setWebViewClient(new WebViewClient() {
             @Override
             public void onReceivedError(WebView view, int errorCode, String description, String failingUrl) {
                 if (!isNetworkAvailable()) {
                     webView.getSettings().setCacheMode(WebSettings.LOAD_CACHE_ELSE_NETWORK);
                 }
-                webView.loadUrl(TARGET_URL);
+                Log.e("WebView", "Error: " + description);
+            }
+
+            @Override
+            public void onPageFinished(WebView view, String url) {
+                super.onPageFinished(view, url);
+                // Inject React error handler
+                String errorHandler = 
+                    "window.onerror = function(message, source, lineno, colno, error) {" +
+                    "   console.log('JavaScript Error: ' + message);" +
+                    "   return true;" +
+                    "};";
+                view.evaluateJavascript(errorHandler, null);
+            }
+        });
+
+        // Add console logging
+        webView.setWebChromeClient(new WebChromeClient() {
+            @Override
+            public boolean onConsoleMessage(ConsoleMessage consoleMessage) {
+                Log.d("WebView Console", consoleMessage.message());
+                return true;
             }
         });
 
         // Set initial cache mode based on network availability
         if (!isNetworkAvailable()) {
             webSettings.setCacheMode(WebSettings.LOAD_CACHE_ELSE_NETWORK);
+        } else {
+            webSettings.setCacheMode(WebSettings.LOAD_NO_CACHE); // Try without cache first
         }
 
-        // Load the URL
-        webView.loadUrl(TARGET_URL);
+        // Clear any existing data
+        webView.clearCache(true);
+        CookieManager.getInstance().removeAllCookies(null);
+
+        // Load the URL with a query parameter to indicate Clover device
+        String urlWithParam = TARGET_URL + (TARGET_URL.contains("?") ? "&" : "?") + "platform=clover";
+        webView.loadUrl(urlWithParam);
 
         // Handle system bars
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main), (v, insets) -> {
@@ -115,7 +156,7 @@ public class MainActivity extends AppCompatActivity {
             return insets;
         });
 
-        // Add JavaScript interface with WebView reference
+        // Add JavaScript interface with WebView reference (from your original code)
         webView.addJavascriptInterface(new AndroidBridge(webView), "AndroidBridge");
     }
 
@@ -147,6 +188,12 @@ public class MainActivity extends AppCompatActivity {
     protected void onResume() {
         super.onResume();
         webView.onResume();
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        webView.destroy();
     }
 
     public class AndroidBridge {
@@ -356,10 +403,18 @@ public class MainActivity extends AppCompatActivity {
         }
 
         private String getCloverDeviceSerial() {
-            // Get the stored Clover device serial from SharedPreferences
             SharedPreferences sharedPreferences = MainActivity.this.getSharedPreferences(
                 "CloverPrefs", Context.MODE_PRIVATE);
             return sharedPreferences.getString("clover_device_serial", "");
+        }
+
+        @JavascriptInterface
+        public void saveCloverDeviceSerial(String serial) {
+            SharedPreferences sharedPreferences = MainActivity.this.getSharedPreferences(
+                "CloverPrefs", Context.MODE_PRIVATE);
+            SharedPreferences.Editor editor = sharedPreferences.edit();
+            editor.putString("clover_device_serial", serial);
+            editor.apply();
         }
     }
 
@@ -461,4 +516,84 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    // Add this method to clear WebView data if needed
+    private void clearWebViewData() {
+        webView.clearCache(true);
+        webView.clearHistory();
+        webView.clearFormData();
+        
+        CookieManager cookieManager = CookieManager.getInstance();
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            cookieManager.removeAllCookies(null);
+            cookieManager.flush();
+        }
+        
+        WebStorage.getInstance().deleteAllData();
+    }
+
+    // Add this method to check if the device is a Clover device
+    private boolean isCloverDevice() {
+        return Build.MANUFACTURER.toLowerCase().contains("clover") || 
+               Build.MODEL.toLowerCase().contains("clover");
+    }
+
+    // Add this new class for handling local storage
+    public class WebAppInterface {
+        Context mContext;
+        SharedPreferences sharedPreferences;
+
+        WebAppInterface(Context c) {
+            mContext = c;
+            sharedPreferences = mContext.getSharedPreferences("WebViewStorage", Context.MODE_PRIVATE);
+        }
+
+        @JavascriptInterface
+        public void setItem(String key, String value) {
+            SharedPreferences.Editor editor = sharedPreferences.edit();
+            editor.putString(key, value);
+            editor.apply();
+        }
+
+        @JavascriptInterface
+        public String getItem(String key) {
+            return sharedPreferences.getString(key, null);
+        }
+
+        @JavascriptInterface
+        public void removeItem(String key) {
+            SharedPreferences.Editor editor = sharedPreferences.edit();
+            editor.remove(key);
+            editor.apply();
+        }
+
+        @JavascriptInterface
+        public void clear() {
+            SharedPreferences.Editor editor = sharedPreferences.edit();
+            editor.clear();
+            editor.apply();
+        }
+    }
+
+    // Add this method to inject the local storage polyfill
+    private void injectLocalStorageShim() {
+        String localStorageShim = 
+            "if (!window.localStorage) {" +
+            "    window.localStorage = {" +
+            "        getItem: function(key) {" +
+            "            return Android.getItem(key);" +
+            "        }," +
+            "        setItem: function(key, value) {" +
+            "            Android.setItem(key, String(value));" +
+            "        }," +
+            "        removeItem: function(key) {" +
+            "            Android.removeItem(key);" +
+            "        }," +
+            "        clear: function() {" +
+            "            Android.clear();" +
+            "        }" +
+            "    };" +
+            "}";
+
+        webView.evaluateJavascript(localStorageShim, null);
+    }
 }
